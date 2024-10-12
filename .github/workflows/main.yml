@@ -1,7 +1,7 @@
 name: Puppeteer Scraper
 
 on:
-  workflow_dispatch:  # Allows manual runs from the GitHub Actions page
+  workflow_dispatch:
 
 jobs:
   run-scraper:
@@ -14,18 +14,22 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: '16'  # Use Node.js 16.x
+        node-version: '16'
+
+    # List all files in the directory for debugging purposes
+    - name: List files in the directory
+      run: ls -al
 
     - name: Install dependencies
       run: |
-        npm install  # Install Puppeteer and dependencies
+        npm install
 
     - name: Run Puppeteer scraper
       run: |
-        node main.js  # Update to correct script name, assuming main.js is your script
+        node main.js  # Ensure this file exists in the root of your repo
 
     - name: Upload Excel output
       uses: actions/upload-artifact@v3
       with:
         name: scraper-output
-        path: '*.xlsx'  # Upload the generated Excel file
+        path: '*.xlsx'
