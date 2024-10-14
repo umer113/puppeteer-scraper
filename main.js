@@ -1,6 +1,7 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const XLSX = require("xlsx");
+const path = require("path");
 
 (async () => {
     const cookiesPath = "cookies.json";
@@ -10,7 +11,8 @@ const XLSX = require("xlsx");
     ];
 
     const browser = await puppeteer.launch({
-        headless: true,  // Headless mode for GitHub Actions
+        headless: false,
+        executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
@@ -31,6 +33,30 @@ const XLSX = require("xlsx");
         await page.setCookie(...cookies);
         console.log("Cookies loaded.");
     }
+
+    await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+        Object.defineProperty(navigator, "platform", { get: () => "Win32" });
+        Object.defineProperty(navigator, "plugins", {
+            get: () => [
+                {
+                    description: "Portable Document Format",
+                    filename: "internal-pdf-viewer",
+                    length: 1,
+                    name: "Chrome PDF Plugin",
+                },
+                {
+                    description: "Portable Document Format",
+                    filename: "mhjfbmdgcfjbbpaeojofohoefgiehjai",
+                    length: 1,
+                    name: "Chrome PDF Viewer",
+                },
+            ],
+        });
+        Object.defineProperty(navigator, "languages", {
+            get: () => ["en-US", "en"],
+        });
+    });
 
     try {
         for (const baseUrl of baseUrls) {
@@ -72,7 +98,7 @@ const XLSX = require("xlsx");
 
             console.log(`Total unique property URLs for ${baseUrl}: ${propertyUrls.size}`);
 
-            let count = 1;
+            let count = 1
 
             for (const url of propertyUrls) {
 
@@ -89,37 +115,43 @@ const XLSX = require("xlsx");
                     const description = document.querySelector('.ant-typography.property-description')?.innerText || '';
                     const addressElements = Array.from(document.querySelectorAll('.property-location-tag p'));
                     const address = addressElements.map(p => p.innerText.trim()).join(', ') || '';
-
+                
                     let price = document.querySelector('.ant-typography.price strong')?.innerText || '';
-
+                
                     const geoJson = document.querySelector('script[type="application/ld+json"]')?.innerText || '{}';
                     const geo = JSON.parse(geoJson).object?.geo || {};
                     const latitude = geo.latitude || '';
                     const longitude = geo.longitude || '';
-
+                
                     // Extract details as key-value pairs from the technical sheet
                     const detailRows = Array.from(document.querySelectorAll('.jsx-952467510.technical-sheet .ant-row'));
                     const details = {};
                     let propertyType = ''; // Variable to hold the property type
-
+                    let area = ''; // Variable to hold the M² edificados
+                
                     detailRows.forEach(row => {
                         const keyElement = row.querySelector('.ant-space-item span.ant-typography:not(.ant-typography-secondary)');
                         const valueElement = row.querySelector('strong') || row.querySelector('span:not(.ant-typography-secondary)');
-
+                
                         const key = keyElement?.innerText?.trim();
                         const value = valueElement?.innerText?.trim();
-
+                
                         if (key && value) {
                             details[key] = value;
-
+                
                             // Check if this key is 'Tipo de Propiedad' to extract the property type
                             if (key === 'Tipo de Propiedad') {
                                 propertyType = value;
                             }
+                
+                            // Check if this key is 'M² edificados' to extract the area
+                            if (key === 'M² edificados') {
+                                area = value;
+                            }
                         }
                     });
-
-                    // Transaction type:
+                
+                    // Transaction type
                     let transactionType = '';
                     const transactionElement = document.querySelector('.ant-typography.ant-typography-secondary.operation_type');
                     if (transactionElement && transactionElement.innerText.includes('Venta')) {
@@ -127,17 +159,11 @@ const XLSX = require("xlsx");
                     } else {
                         transactionType = 'rent';
                     }
-
-                    if (price === '') {
+                
+                    if (price == '') {
                         price = 'ask';
                     }
-
-                    let area = '';
-                    const areaSpans = document.querySelectorAll('span.ant-typography.ant-typography-ellipsis.ant-typography-ellipsis-single-line');
-                    if (areaSpans.length >= 3) {
-                        area = areaSpans[2]?.innerText.trim(); // Extracting the text of the third span
-                    }
-
+                
                     return {
                         url,
                         name,
@@ -160,21 +186,40 @@ const XLSX = require("xlsx");
 
                 console.log(completeDetails);
                 properties.push(completeDetails);
-                console.log("count: ", count);
-                count++;  // Push flattened details to properties array
+                console.log("count: ", count)
+                count++;// Push flattened details to properties array
+            }
+
+            // Ensure the output directory exists
+            const outputDir = path.join(__dirname, 'output');
+            if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir);
             }
 
             // Create an Excel workbook and add the data
             const workbook = XLSX.utils.book_new();
             const worksheet = XLSX.utils.json_to_sheet(properties);
 
+            // Create a range for the headers and set them to bold
+            const range = XLSX.utils.decode_range(worksheet['!ref']);
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: C })];
+                if (cell && cell.s) {
+                    cell.s = {
+                        font: {
+                            bold: true,
+                        }
+                    };
+                }
+            }
+
             XLSX.utils.book_append_sheet(workbook, worksheet, "Properties");
 
             // Generate a safe filename from the base URL
             const safeUrl = baseUrl.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const outputPath = `${safeUrl}.xlsx`;
+            const outputPath = path.join(outputDir, `${safeUrl}.xlsx`);
 
-            // Save the Excel file
+            // Save the Excel file in the output directory
             XLSX.writeFile(workbook, outputPath);
             console.log(`Data saved to ${outputPath}`);
         }
