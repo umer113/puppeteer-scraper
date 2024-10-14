@@ -4,15 +4,14 @@ const XLSX = require("xlsx");
 const path = require("path");
 
 (async () => {
-    const cookiesPath = "cookies.json";
+     const cookiesPath = "cookies.json";
     const properties = []; // Array to hold all property details
     const baseUrls = [
         'https://www.infocasas.com.bo/alquiler'
     ];
 
     const browser = await puppeteer.launch({
-        headless: true,
-        executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+        headless: true, // You can change this to "new" if you want to use the new Headless mode.
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
