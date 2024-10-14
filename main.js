@@ -4,14 +4,14 @@ const XLSX = require("xlsx");
 const path = require("path");
 
 (async () => {
-     const cookiesPath = "cookies.json";
+    const cookiesPath = "cookies.json";
     const properties = []; // Array to hold all property details
     const baseUrls = [
         'https://www.infocasas.com.bo/alquiler'
     ];
 
     const browser = await puppeteer.launch({
-        headless: 'new', // You can change this to "new" if you want to use the new Headless mode.
+        headless: 'new', 
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
@@ -61,23 +61,20 @@ const path = require("path");
         for (const baseUrl of baseUrls) {
             await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 0 });
 
-            // Extract total number of pages
             const totalPages = await page.evaluate(() => {
                 const paginationLinks = Array.from(document.querySelectorAll('ul.search-results-pagination li a.ant-pagination-item-link'));
 
                 if (paginationLinks.length > 0) {
-                    // Extract the page numbers from the href attributes
                     const pageNumbers = paginationLinks.map(link => {
                         const href = link.getAttribute('href');
                         const match = href.match(/pagina(\d+)/);
                         return match ? parseInt(match[1], 10) : null;
                     }).filter(num => num !== null);
 
-                    // Return the maximum page number found, which should be the last page
                     return Math.max(...pageNumbers);
                 }
 
-                return 1; // Default to 1 if no pagination links are found
+                return 1;
             });
 
             console.log(`Total pages: ${totalPages}`);
@@ -97,15 +94,15 @@ const path = require("path");
 
             console.log(`Total unique property URLs for ${baseUrl}: ${propertyUrls.size}`);
 
-            let count = 1
+            let count = 1;
 
             for (const url of propertyUrls) {
-
                 const ipUrlPattern = /^https?:\/\/\d+\.\d+\.\d+\.\d+/;
                 if (ipUrlPattern.test(url)) {
                     console.log(`Skipping IP URL: ${url}`);
-                    continue;  // Skip this URL and move to the next one
+                    continue;
                 }
+
                 console.log(`Scraping property at URL: ${url}`);
                 await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
 
@@ -114,43 +111,39 @@ const path = require("path");
                     const description = document.querySelector('.ant-typography.property-description')?.innerText || '';
                     const addressElements = Array.from(document.querySelectorAll('.property-location-tag p'));
                     const address = addressElements.map(p => p.innerText.trim()).join(', ') || '';
-                
+
                     let price = document.querySelector('.ant-typography.price strong')?.innerText || '';
-                
+
                     const geoJson = document.querySelector('script[type="application/ld+json"]')?.innerText || '{}';
                     const geo = JSON.parse(geoJson).object?.geo || {};
                     const latitude = geo.latitude || '';
                     const longitude = geo.longitude || '';
-                
-                    // Extract details as key-value pairs from the technical sheet
+
                     const detailRows = Array.from(document.querySelectorAll('.jsx-952467510.technical-sheet .ant-row'));
                     const details = {};
-                    let propertyType = ''; // Variable to hold the property type
-                    let area = ''; // Variable to hold the M² edificados
-                
+                    let propertyType = '';
+                    let area = '';
+
                     detailRows.forEach(row => {
                         const keyElement = row.querySelector('.ant-space-item span.ant-typography:not(.ant-typography-secondary)');
                         const valueElement = row.querySelector('strong') || row.querySelector('span:not(.ant-typography-secondary)');
-                
+
                         const key = keyElement?.innerText?.trim();
                         const value = valueElement?.innerText?.trim();
-                
+
                         if (key && value) {
                             details[key] = value;
-                
-                            // Check if this key is 'Tipo de Propiedad' to extract the property type
+
                             if (key === 'Tipo de Propiedad') {
                                 propertyType = value;
                             }
-                
-                            // Check if this key is 'M² edificados' to extract the area
+
                             if (key === 'M² edificados') {
                                 area = value;
                             }
                         }
                     });
-                
-                    // Transaction type
+
                     let transactionType = '';
                     const transactionElement = document.querySelector('.ant-typography.ant-typography-secondary.operation_type');
                     if (transactionElement && transactionElement.innerText.includes('Venta')) {
@@ -158,11 +151,11 @@ const path = require("path");
                     } else {
                         transactionType = 'rent';
                     }
-                
+
                     if (price == '') {
                         price = 'ask';
                     }
-                
+
                     return {
                         url,
                         name,
@@ -170,36 +163,32 @@ const path = require("path");
                         address,
                         price,
                         propertyType,
-                        area, // include the area
+                        area,
                         transactionType,
                         latitude,
                         longitude,
-                        details // include scraped details
+                        details
                     };
                 }, url);
 
-                // Flatten the details object and merge with the main property object
                 const flattenedDetails = Object.assign({}, propertyDetails.details);
                 const completeDetails = { ...propertyDetails, ...flattenedDetails };
-                delete completeDetails.details; // Remove the nested details
+                delete completeDetails.details;
 
                 console.log(completeDetails);
                 properties.push(completeDetails);
-                console.log("count: ", count)
-                count++;// Push flattened details to properties array
+                console.log("count: ", count);
+                count++;
             }
 
-            // Ensure the output directory exists
             const outputDir = path.join(__dirname, 'output');
             if (!fs.existsSync(outputDir)) {
                 fs.mkdirSync(outputDir);
             }
 
-            // Create an Excel workbook and add the data
             const workbook = XLSX.utils.book_new();
             const worksheet = XLSX.utils.json_to_sheet(properties);
 
-            // Create a range for the headers and set them to bold
             const range = XLSX.utils.decode_range(worksheet['!ref']);
             for (let C = range.s.c; C <= range.e.c; ++C) {
                 const cell = worksheet[XLSX.utils.encode_cell({ r: 0, c: C })];
@@ -214,23 +203,24 @@ const path = require("path");
 
             XLSX.utils.book_append_sheet(workbook, worksheet, "Properties");
 
-            // Generate a safe filename from the base URL
             const safeUrl = baseUrl.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             const outputPath = path.join(outputDir, `${safeUrl}.xlsx`);
 
-            // Save the Excel file in the output directory
             XLSX.writeFile(workbook, outputPath);
-            console.log(`Data saved to ${outputPath}`);
+
+            if (fs.existsSync(outputPath)) {
+                console.log(`File ${outputPath} created successfully.`);
+            } else {
+                console.error(`File ${outputPath} not found.`);
+            }
         }
 
-        // Save cookies after the session
         const cookies = await page.cookies();
         fs.writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2));
         console.log("Cookies saved.");
     } catch (error) {
         console.error("Error during scraping:", error);
     } finally {
-        // Close the browser
         await browser.close();
     }
 })();
