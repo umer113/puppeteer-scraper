@@ -11,7 +11,7 @@ const path = require("path");
     ];
 
     const browser = await puppeteer.launch({
-        headless: new, // You can change this to "new" if you want to use the new Headless mode.
+        headless: 'new', // You can change this to "new" if you want to use the new Headless mode.
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
