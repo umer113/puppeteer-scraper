@@ -16,7 +16,6 @@ jobs:
       with:
         node-version: '16'
 
-    # List all files in the directory for debugging purposes
     - name: List files in the directory
       run: ls -al
 
@@ -32,4 +31,4 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: scraper-output
-        path: '*.xlsx'
+        path: 'output/*.xlsx'  # Changed path to reflect 'output' directory where the Excel file is saved
