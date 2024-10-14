@@ -11,7 +11,7 @@ const path = require("path");
     ];
 
     const browser = await puppeteer.launch({
-        headless: false,
+        headless: true,
         executablePath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
         args: [
             "--no-sandbox",
