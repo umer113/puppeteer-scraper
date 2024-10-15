@@ -4,8 +4,16 @@ const fs = require('fs');
 const path = require('path');
 
 (async () => {
-    const browser = await puppeteer.launch({ headless: false });
-
+const browser = await puppeteer.launch({
+        headless: 'new', 
+        args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-blink-features=AutomationControlled",
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36",
+        ],
+        defaultViewport: null,
+    });
     const urlsToScrape = [
         'https://www.propertyfinder.eg/en/search?c=1&t=1&pf=5500000&pt=6500000&fu=0&ob=mr',
         // Add more URLs as needed
