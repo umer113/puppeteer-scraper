@@ -15,7 +15,7 @@ const browser = await puppeteer.launch({
         defaultViewport: null,
     });
     const urlsToScrape = [
-        'https://www.propertyfinder.eg/en/search?c=1&t=1&pf=5500000&pt=6500000&fu=0&ob=mr',
+        'https://www.propertyfinder.eg/en/search?c=1&t=1&pt=1500000&fu=0&ob=mr',
         // Add more URLs as needed
     ];
 
@@ -107,15 +107,17 @@ const browser = await puppeteer.launch({
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, ws, "Properties");
 
+        const sanitizedFileName = url.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.xlsx';
+        const outputDirectory = path.join(__dirname, 'output');
+
         // Ensure the output directory exists
-        const outputDir = path.join(__dirname, 'output');
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir);
+        if (!fs.existsSync(outputDirectory)) {
+            fs.mkdirSync(outputDirectory);
         }
 
-        const fileName = path.join(outputDir, url.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.xlsx');
-        xlsx.writeFile(wb, fileName);
-        console.log(`Data saved to ${fileName}`);
+        const filePath = path.join(outputDirectory, sanitizedFileName);
+        xlsx.writeFile(wb, filePath);
+        console.log(`Data saved to ${filePath}`);
     };
 
     for (const url of urlsToScrape) {
