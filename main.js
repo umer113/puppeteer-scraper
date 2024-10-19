@@ -3,9 +3,12 @@ const xlsx = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 
+// Helper function to delay execution
+const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
+
 (async () => {
-const browser = await puppeteer.launch({
-        headless: 'new', 
+    const browser = await puppeteer.launch({
+        headless: false, 
         args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
@@ -14,84 +17,96 @@ const browser = await puppeteer.launch({
         ],
         defaultViewport: null,
     });
+
     const urlsToScrape = [
         'https://www.propertyfinder.eg/en/search?c=1&t=1&pt=1500000&fu=0&ob=mr',
         // Add more URLs as needed
     ];
 
     const scrapePropertyData = async (url, browser) => {
-        try {
-            const propertyPage = await browser.newPage();
-            await propertyPage.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+        let retries = 3; // Retry logic for better resilience
+        let propertyPage;
 
-            let transaction_type = '';
+        while (retries > 0) {
+            try {
+                propertyPage = await browser.newPage();
+                await propertyPage.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+                
+                let transaction_type = '';
 
-            if (url.includes('sale')) {
-                transaction_type = 'sale';
-            } else if (url.includes('rent')) {
-                transaction_type = 'rent';
-            }
-
-            await propertyPage.waitForSelector('script#__NEXT_DATA__');
-
-            const propertyData = await propertyPage.evaluate((transaction_type) => {
-                const scriptTag = document.querySelector('script#__NEXT_DATA__');
-                let propertyDetails = {};
-
-                if (scriptTag) {
-                    const jsonData = JSON.parse(scriptTag.innerText);
-                    const property = jsonData.props.pageProps.propertyResult.property;
-
-                    const characteristics = {};
-                    const characteristicsContainer = document.querySelector('.styles_desktop_list__Kq7ZK');
-                    if (characteristicsContainer) {
-                        const items = characteristicsContainer.querySelectorAll('.styles_desktop_list__item__lF_Fh');
-                        items.forEach(item => {
-                            const label = item.querySelector('.styles_desktop_list__label-text__0YJ8y')?.innerText.trim();
-                            const value = item.querySelector('.styles_desktop_list__value__uIdMl')?.innerText.trim();
-                            if (label && value) {
-                                characteristics[label] = value;
-                            }
-                        });
-                    }
-
-                    const amenities = [];
-                    const amenitiesContainer = document.querySelector('.styles_amenity__container__kL4sm');
-                    if (amenitiesContainer) {
-                        const items = amenitiesContainer.querySelectorAll('.styles_amenity__c2P5u');
-                        items.forEach(item => {
-                            const amenity = item.querySelector('p.styles_text__IlyiW')?.innerText.trim();
-                            if (amenity) {
-                                amenities.push(amenity);
-                            }
-                        });
-                    }
-
-                    propertyDetails = {
-                        name: property.title,
-                        address: property.location.full_name,
-                        price: property.price.value,
-                        description: property.description,
-                        area: property.size.value,
-                        propertyType: property.property_type,
-                        transactionType: transaction_type,
-                        latitude: property.location.coordinates.lat,
-                        longitude: property.location.coordinates.lon,
-                        propertyUrl: property.share_url,
-                        characteristics: characteristics,
-                        amenities: amenities
-                    };
+                if (url.includes('sale')) {
+                    transaction_type = 'sale';
+                } else if (url.includes('rent')) {
+                    transaction_type = 'rent';
                 }
 
-                return propertyDetails;
-            }, transaction_type);
+                await propertyPage.waitForSelector('script#__NEXT_DATA__');
 
-            await propertyPage.close();
-            return propertyData;
-        } catch (error) {
-            console.error(`Error scraping property data: ${error}`);
-            return null;
+                const propertyData = await propertyPage.evaluate((transaction_type) => {
+                    const scriptTag = document.querySelector('script#__NEXT_DATA__');
+                    let propertyDetails = {};
+
+                    if (scriptTag) {
+                        const jsonData = JSON.parse(scriptTag.innerText);
+                        const property = jsonData.props.pageProps.propertyResult.property;
+
+                        const characteristics = {};
+                        const characteristicsContainer = document.querySelector('.styles_desktop_list__Kq7ZK');
+                        if (characteristicsContainer) {
+                            const items = characteristicsContainer.querySelectorAll('.styles_desktop_list__item__lF_Fh');
+                            items.forEach(item => {
+                                const label = item.querySelector('.styles_desktop_list__label-text__0YJ8y')?.innerText.trim();
+                                const value = item.querySelector('.styles_desktop_list__value__uIdMl')?.innerText.trim();
+                                if (label && value) {
+                                    characteristics[label] = value;
+                                }
+                            });
+                        }
+
+                        const amenities = [];
+                        const amenitiesContainer = document.querySelector('.styles_amenity__container__kL4sm');
+                        if (amenitiesContainer) {
+                            const items = amenitiesContainer.querySelectorAll('.styles_amenity__c2P5u');
+                            items.forEach(item => {
+                                const amenity = item.querySelector('p.styles_text__IlyiW')?.innerText.trim();
+                                if (amenity) {
+                                    amenities.push(amenity);
+                                }
+                            });
+                        }
+
+                        propertyDetails = {
+                            name: property.title,
+                            address: property.location.full_name,
+                            price: property.price.value,
+                            description: property.description,
+                            area: property.size.value,
+                            propertyType: property.property_type,
+                            transactionType: transaction_type,
+                            latitude: property.location.coordinates.lat,
+                            longitude: property.location.coordinates.lon,
+                            propertyUrl: property.share_url,
+                            characteristics: characteristics,
+                            amenities: amenities
+                        };
+                    }
+
+                    return propertyDetails;
+                }, transaction_type);
+
+                await propertyPage.close();
+                return propertyData;
+            } catch (error) {
+                retries--;
+                console.error(`Error scraping property data: ${error}. Retries left: ${retries}`);
+                await delay(3000); // Delay before retrying
+            } finally {
+                if (propertyPage) {
+                    await propertyPage.close();
+                }
+            }
         }
+        return null; // Return null if all retries fail
     };
 
     const saveToExcel = (data, url) => {
