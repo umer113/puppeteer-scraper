@@ -16,19 +16,39 @@ jobs:
       with:
         node-version: '16'
 
-    - name: List files in the directory
+    - name: List files in the root directory
       run: ls -al
 
-    - name: Install dependencies
+    - name: Verify 'main.js' file exists
       run: |
-        npm install
+        if [ ! -f "main.js" ]; then
+          echo "Error: main.js file not found."
+          exit 1
+        fi
+
+    - name: Install dependencies
+      run: npm install
 
     - name: Run Puppeteer scraper
       run: |
-        node main.js  # Ensure this file exists in the root of your repo
+        node main.js
+        if [ $? -ne 0 ]; then
+          echo "Error: Puppeteer scraper failed."
+          exit 1
+        fi
+
+    - name: Check for output directory
+      run: |
+        if [ ! -d "output" ]; then
+          echo "Error: output directory not found."
+          exit 1
+        fi
+
+    - name: List files in the output directory
+      run: ls -al output
 
     - name: Upload Excel output
       uses: actions/upload-artifact@v3
       with:
         name: scraper-output
-        path: 'output/*.xlsx'  # Changed path to reflect 'output' directory where the Excel file is saved
+        path: 'output/*.xlsx'
