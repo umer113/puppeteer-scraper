@@ -8,15 +8,14 @@ const delay = (time) => new Promise(resolve => setTimeout(resolve, time));
 
 (async () => {
     const browser = await puppeteer.launch({
-        headless: false, 
-        args: [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36",
-        ],
-        defaultViewport: null,
-    });
+    headless: "new", // Make sure it runs in headless mode
+    args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage', // Optional: avoid memory issues
+        '--disable-gpu', // Optional: disable GPU acceleration
+    ],
+});
 
     const urlsToScrape = [
         'https://www.propertyfinder.eg/en/search?c=1&t=1&pt=1500000&fu=0&ob=mr',
