@@ -8,8 +8,8 @@
   },
   "dependencies": {
     "puppeteer": "^19.0.0",
-    "puppeteer-extra": "^3.3.4",  // Add puppeteer-extra
-    "puppeteer-extra-plugin-stealth": "^2.7.7",  // Add puppeteer-extra-plugin-stealth
+    "puppeteer-extra": "^3.3.4",  
+    "puppeteer-extra-plugin-stealth": "^2.7.7",  
     "xlsx": "^0.17.0"
   }
 }
