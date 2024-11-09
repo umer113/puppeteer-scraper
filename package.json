@@ -11,6 +11,6 @@
     "puppeteer-extra": "^3.3.4",
     "puppeteer-extra-plugin-stealth": "^2.7.7",
     "xlsx": "^0.17.0",
-    "exceljs": "^4.3.0" // Add exceljs here
+    "exceljs": "^4.3.0" 
   }
 }
