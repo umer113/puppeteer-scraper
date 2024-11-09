@@ -142,10 +142,10 @@ async function saveToExcel(data, url) {
 
 // Main function to handle the scraping process
 (async () => {
-  const browser = await puppeteerExtra.launch({
-    headless: false,
-    executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-  });
+const browser = await puppeteerExtra.launch({
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox']
+});
   const page = await browser.newPage();
 
   const urls = [
