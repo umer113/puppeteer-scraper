@@ -1,179 +1,213 @@
-const puppeteer = require('puppeteer');
-const xlsx = require('xlsx');
+const puppeteer = require('puppeteer-core');
+const puppeteerExtra = require('puppeteer-extra');
+const stealthPlugin = require('puppeteer-extra-plugin-stealth');
+const fs = require('fs');
+const ExcelJS = require('exceljs');
 
-(async () => {
-    const browser = await puppeteer.launch({ headless: "new" });
+puppeteerExtra.use(stealthPlugin());
 
-    const urlsToScrape = [
-        'https://www.propertyfinder.eg/en/search?c=1&t=1&pf=5500000&pt=6500000&fu=0&ob=mr',
-        // Add more URLs as needed
-    ];
+// Function to introduce a delay
+function delay(time) {
+  return new Promise(function(resolve) {
+    setTimeout(resolve, time);
+  });
+}
 
-    const scrapePropertyData = async (url, browser) => {
-        try {
-            const propertyPage = await browser.newPage();
-            await propertyPage.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
+// Function to extract the total number of listings
+async function extractTotalListings(page) {
+  await page.waitForSelector('.flex');
 
-            let transaction_type = '';
+  const totalListings = await page.evaluate(() => {
+    const element = document.querySelector('.flex p b');
+    return element ? parseInt(element.innerText.trim()) : 0;
+  });
 
-            if (url.includes('sale')) {
-                transaction_type = 'sale';
-            } else if (url.includes('rent')) {
-                transaction_type = 'rent';
-            }
+  return totalListings;
+}
 
-            await propertyPage.waitForSelector('script#__NEXT_DATA__');
+// Function to remove HTML tags from a string
+function removeHTMLTags(text) {
+  return text.replace(/<[^>]*>?/gm, '').replace(/\s\s+/g, ' ').trim();
+}
 
-            const propertyData = await propertyPage.evaluate((transaction_type) => {
-                const scriptTag = document.querySelector('script#__NEXT_DATA__');
-                let propertyDetails = {};
+// Function to extract data from the property URL
+async function extractPropertyData(page, url) {
+  try {
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+    
+    // Add a delay of 3 seconds to mimic human behavior
+    await delay(3000);
 
-                if (scriptTag) {
-                    const jsonData = JSON.parse(scriptTag.innerText);
-                    const property = jsonData.props.pageProps.propertyResult.property;
+    await page.waitForSelector('#__NEXT_DATA__');
 
-                    const characteristics = {};
-                    const characteristicsContainer = document.querySelector('.styles_desktop_list__Kq7ZK');
-                    if (characteristicsContainer) {
-                        const items = characteristicsContainer.querySelectorAll('.styles_desktop_list__item__lF_Fh');
-                        items.forEach(item => {
-                            const label = item.querySelector('.styles_desktop_list__label-text__0YJ8y')?.innerText.trim();
-                            const value = item.querySelector('.styles_desktop_list__value__uIdMl')?.innerText.trim();
-                            if (label && value) {
-                                characteristics[label] = value;
-                            }
-                        });
-                    }
+    const propertyData = await page.evaluate(() => {
+      const scriptTag = document.querySelector('#__NEXT_DATA__');
+      const jsonData = JSON.parse(scriptTag.innerHTML);
+      return jsonData.props.pageProps.initialState.objectView.object;
+    });
 
-                    const amenities = [];
-                    const amenitiesContainer = document.querySelector('.styles_amenity__container__kL4sm');
-                    if (amenitiesContainer) {
-                        const items = amenitiesContainer.querySelectorAll('.styles_amenity__c2P5u');
-                        items.forEach(item => {
-                            const amenity = item.querySelector('p.styles_text__IlyiW')?.innerText.trim();
-                            if (amenity) {
-                                amenities.push(amenity);
-                            }
-                        });
-                    }
-
-                    propertyDetails = {
-                        name: property.title,
-                        address: property.location.full_name,
-                        price: property.price.value,
-                        description: property.description,
-                        area: property.size.value,
-                        propertyType: property.property_type,
-                        transactionType: transaction_type,
-                        latitude: property.location.coordinates.lat,
-                        longitude: property.location.coordinates.lon,
-                        propertyUrl: property.share_url,
-                        characteristics: characteristics,
-                        amenities: amenities
-                    };
-                }
-
-                return propertyDetails;
-            }, transaction_type);
-
-            await propertyPage.close();
-            return propertyData;
-        } catch (error) {
-            console.error(`Error scraping property data: ${error}`);
-            return null;
-        }
-    };
-
-    const saveToExcel = (data, url) => {
-        const formattedData = data.map(property => {
-            return {
-                ...property,
-                characteristics: JSON.stringify(property.characteristics), // Convert object to JSON string
-                amenities: property.amenities.join(', ') // Convert array to comma-separated string
-            };
+    const characteristics = await page.evaluate(() => {
+      const characteristicsObj = {};
+      const characteristicSection = document.querySelector('section.bg-white.flex.flex-wrap.md\\:p-6.my-4.rounded-md ul');
+      if (characteristicSection) {
+        const items = characteristicSection.querySelectorAll('li');
+        items.forEach(item => {
+          const keyElement = item.querySelector('span.text-basic');
+          const valueElement = item.querySelector('p');
+          if (keyElement && valueElement) {
+            const key = keyElement.innerText.trim();
+            const value = valueElement.innerText.trim();
+            characteristicsObj[key] = value;
+          }
         });
-    
-        const ws = xlsx.utils.json_to_sheet(formattedData);
-        const wb = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(wb, ws, "Properties");
-    
-        // Ensure the file is saved in the 'output' directory
-        const fileName = url.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.xlsx';
-        const outputFilePath = path.join('output', fileName);  // Save file in 'output' folder
-        xlsx.writeFile(wb, outputFilePath);
-        console.log(`Data saved to ${outputFilePath}`);
-    };
+      }
+      return characteristicsObj;
+    });
 
-    for (const url of urlsToScrape) {
-        console.log(`Scraping URL: ${url}`);
+    const transactionType = url.includes('sale') ? 'Sale' : 'Rent';
 
-        try {
-            const page = await browser.newPage();
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
+    // Extract the property type
+    const propertyType = await page.evaluate(() => {
+      const spanElement = document.querySelector('span[itemprop="name"]');
+      return spanElement ? spanElement.innerText.trim() : '';
+    });
 
-            const numberOfPropertiesResult = await page.evaluate(() => {
-                const span = document.querySelector('span[aria-label="Search results count"]');
-                if (span) {
-                    const propertiesText = span.innerText;
-                    const numberOfProperties = parseInt(propertiesText.replace(/,/g, '').split(' ')[0]);
-                    return {
-                        spanText: span.innerText,
-                        numberOfProperties: numberOfProperties
-                    };
-                }
-                return { spanText: null, numberOfProperties: null };
-            });
+    // Extract the property name from the meta tag
+    const propertyName = await page.evaluate(() => {
+      const metaTag = document.querySelector('meta[property="og:title"]');
+      return metaTag ? metaTag.content : '';
+    });
 
-            const numberOfProperties = numberOfPropertiesResult.numberOfProperties;
-
-            if (numberOfProperties !== null) {
-                console.log(`Number of properties: ${numberOfProperties}`);
-
-                const totalPages = Math.ceil(numberOfProperties / 27);
-                console.log(`Total number of pages: ${totalPages}`);
-
-                let allPropertyUrls = [];
-
-                for (let i = 1; i <= totalPages; i++) {
-                    try {
-                        await page.goto(`${url}&page=${i}`, { waitUntil: 'networkidle2', timeout: 0 });
-                        await page.waitForSelector('a.link-module_link__TaDrq.styles_desktop_gallery-item-wrapper__OW7RH');
-
-                        const propertyUrls = await page.evaluate(() => {
-                            return Array.from(document.querySelectorAll('a.link-module_link__TaDrq.styles_desktop_gallery-item-wrapper__OW7RH'))
-                                .map(link => link.href);
-                        });
-
-                        console.log(`Page ${i}: Found ${propertyUrls.length} property URLs`);
-                        allPropertyUrls = allPropertyUrls.concat(propertyUrls);
-                    } catch (error) {
-                        console.error(`Error navigating to page ${i}: ${error}`);
-                    }
-                }
-
-                console.log(`Total number of property URLs: ${allPropertyUrls.length}`);
-
-                let scrapedData = [];
-
-                for (const propertyUrl of allPropertyUrls) {
-                    console.log(`Visiting: ${propertyUrl}`);
-                    const data = await scrapePropertyData(propertyUrl, browser);
-                    if (data) {
-                        console.log(data);
-                        scrapedData.push(data);
-                    }
-                }
-
-                saveToExcel(scrapedData, url);
-            } else {
-                console.log('Span element not found');
-            }
-
-            await page.close();
-        } catch (error) {
-            console.error(`Error processing URL ${url}: ${error}`);
-        }
+    // Extract the description, first try from the earlier selector, then fall back to the meta tag
+    let cleanDescription = removeHTMLTags(propertyData.description || '');
+    if (!cleanDescription) {
+      const metaDescription = await page.evaluate(() => {
+        const metaTag = document.querySelector('meta[property="og:description"]');
+        return metaTag ? metaTag.content : '';
+      });
+      cleanDescription = metaDescription;
     }
 
-    await browser.close();
+    return {
+      name: propertyName,
+      address: propertyData.address || '',
+      price_in_$: propertyData.priceRates ? propertyData.priceRates['840'] : '',
+      price_in_ruble: propertyData.priceRates ? propertyData.priceRates['933'] : '',
+      description: cleanDescription,
+      area: propertyData.areaTotal || '',
+      longitude: propertyData.location ? propertyData.location[0] : '',
+      latitude: propertyData.location ? propertyData.location[1] : '',
+      propertyType: propertyType,  // Use the extracted property type here
+      transactionType: transactionType,
+      characteristics: characteristics || '',
+      url: url
+    };
+  } catch (error) {
+    console.error(`Failed to scrape property data from ${url}: ${error.message}`);
+    return null;
+  }
+}
+
+// Function to create an Excel file and save the data
+async function saveToExcel(data, url) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Properties');
+
+  worksheet.columns = [
+    { header: 'Name', key: 'name', width: 30 },
+    { header: 'Address', key: 'address', width: 30 },
+    { header: 'price_in_$', key: 'price_in_$', width: 15 },
+    { header: 'price_in_ruble', key: 'price_in_ruble', width: 15 },
+    { header: 'Description', key: 'description', width: 50 },
+    { header: 'Area', key: 'area', width: 10 },
+    { header: 'Longitude', key: 'longitude', width: 15 },
+    { header: 'Latitude', key: 'latitude', width: 15 },
+    { header: 'Property Type', key: 'propertyType', width: 20 },
+    { header: 'Transaction Type', key: 'transactionType', width: 20 },
+    { header: 'Characteristics', key: 'characteristics', width: 50 },
+    { header: 'URL', key: 'url', width: 50 }
+  ];
+
+  data.forEach(item => {
+    if (item) {
+      worksheet.addRow(item);
+    }
+  });
+
+    const fileName = `output/${url.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`;
+    await workbook.xlsx.writeFile(fileName);
+    console.log(`Data saved to ${fileName}`);
+
+}
+
+// Main function to handle the scraping process
+(async () => {
+  const browser = await puppeteerExtra.launch({
+    headless: false,
+    executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+  });
+  const page = await browser.newPage();
+
+  const urls = [
+    'https://realt.by/rent/offices/',
+    // Add more URLs here
+  ];
+
+  for (const url of urls) {
+    try {
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+      const totalListings = await extractTotalListings(page);
+      console.log(`Total listings found: ${totalListings}`);
+
+      const totalPages = Math.ceil(totalListings / 30); // Assuming 30 listings per page
+      console.log(`Total pages to scrape: ${totalPages}`);
+
+      const allPropertyUrls = [];
+
+      // Iterate through all pages
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const pageUrl = `${url}&page=${pageNum}`;
+        try {
+          await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+          await page.waitForSelector('.p-0.bg-white.block');
+
+          const propertyUrls = await page.evaluate(() => {
+            const listings = document.querySelectorAll('.p-0.bg-white.block a.z-1');
+            const urlSet = new Set(); // Initialize a new Set to store URLs
+          
+            Array.from(listings).forEach(listing => {
+              urlSet.add(listing.href); // Add each URL to the Set
+            });
+          
+            return Array.from(urlSet); // Convert the Set back to an Array and return
+          });
+
+          console.log(`Found ${propertyUrls.length} properties on page ${pageNum}`);
+          allPropertyUrls.push(...propertyUrls);
+        } catch (error) {
+          console.error(`Failed to load page ${pageUrl}: ${error.message}`);
+        }
+      }
+
+      console.log(`Total properties found: ${allPropertyUrls.length}`);
+
+      const allPropertyData = [];
+      let count = 1
+      for (const propertyUrl of allPropertyUrls) {
+        const data = await extractPropertyData(page, propertyUrl);
+        console.log(`Scraping ${count} of total ${allPropertyUrls.length}`)
+        if (data) {
+          allPropertyData.push(data);
+          count+=1
+        }
+      }
+
+      await saveToExcel(allPropertyData, url);
+    } catch (error) {
+      console.error(`Failed to process URL ${url}: ${error.message}`);
+    }
+  }
+
+  await browser.close();
 })();
