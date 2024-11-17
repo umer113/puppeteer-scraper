@@ -148,7 +148,7 @@ async function saveToExcel(data, url) {
 // Main function to handle the scraping process
 (async () => {
 const browser = await puppeteerExtra.launch({
-  headless: true,
+  headless: new,
   args: ['--no-sandbox', '--disable-setuid-sandbox']
 });
   const page = await browser.newPage();
