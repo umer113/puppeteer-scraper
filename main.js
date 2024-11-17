@@ -34,7 +34,7 @@ function removeHTMLTags(text) {
 async function extractPropertyData(page, url) {
   try {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-    
+
     // Add a delay of 3 seconds to mimic human behavior
     await delay(3000);
 
@@ -42,8 +42,8 @@ async function extractPropertyData(page, url) {
 
     const propertyData = await page.evaluate(() => {
       const scriptTag = document.querySelector('#__NEXT_DATA__');
-      const jsonData = JSON.parse(scriptTag.innerHTML);
-      return jsonData.props.pageProps.initialState.objectView.object;
+      const jsonData = scriptTag ? JSON.parse(scriptTag.innerHTML) : {};
+      return jsonData.props?.pageProps?.initialState?.objectView?.object || {};
     });
 
     const characteristics = await page.evaluate(() => {
@@ -88,16 +88,21 @@ async function extractPropertyData(page, url) {
       cleanDescription = metaDescription;
     }
 
+    // Extract price in ruble and USD if not found in JSON
+    let priceInRuble = propertyData.priceRatesPerM2?.['933'] || '';
+    let priceInUSD = propertyData.priceRatesPerM2?.['840'] || '';
+
+    console.log(propertyData)
     return {
       name: propertyName,
       address: propertyData.address || '',
-      price_in_$: propertyData.priceRates ? propertyData.priceRates['840'] : '',
-      price_in_ruble: propertyData.priceRates ? propertyData.priceRates['933'] : '',
+      price_in_$: priceInUSD,
+      price_in_ruble: priceInRuble,
       description: cleanDescription,
       area: propertyData.areaTotal || '',
       longitude: propertyData.location ? propertyData.location[0] : '',
       latitude: propertyData.location ? propertyData.location[1] : '',
-      propertyType: propertyType,  // Use the extracted property type here
+      propertyType: propertyType, // Use the extracted property type here
       transactionType: transactionType,
       characteristics: characteristics || '',
       url: url
