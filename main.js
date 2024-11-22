@@ -13,6 +13,21 @@ function delay(time) {
   });
 }
 
+function extractPricePerM(propertyData) {
+    try {
+      if (propertyData.priceRatesPerM2) {
+        const currencyKey = Object.keys(propertyData.priceRatesPerM2)[0]; // Get the first currency key
+        const pricePerM = propertyData.priceRatesPerM2[currencyKey]; // Extract the value
+        return `${pricePerM} ${currencyKey}`; // Format as "price currency"
+      }
+      return 'Price/m² not available';
+    } catch (error) {
+      console.error('Error extracting price per m² from JSON:', error);
+      return 'Price/m² not available';
+    }
+  }
+
+
 // Function to extract the total number of listings
 async function extractTotalListings(page) {
   await page.waitForSelector('.flex');
@@ -91,6 +106,9 @@ async function extractPropertyData(page, url) {
     // Extract price in ruble and USD if not found in JSON
     let priceInRuble = propertyData.priceRatesPerM2?.['933'] || '';
     let priceInUSD = propertyData.priceRatesPerM2?.['840'] || '';
+
+        const pricePerM = extractPricePerM(propertyData);
+
 
     console.log(propertyData)
     return {
