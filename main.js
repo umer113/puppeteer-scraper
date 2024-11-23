@@ -61,6 +61,10 @@ async function extractPropertyData(page, url) {
       return jsonData.props?.pageProps?.initialState?.objectView?.object || {};
     });
 
+    const transactionType = url.includes('sale') ? 'Sale' : 'Rent';
+
+    const features = await extractFeatures(page);
+
     const characteristics = await page.evaluate(() => {
       const characteristicsObj = {};
       const characteristicSection = document.querySelector('section.bg-white.flex.flex-wrap.md\\:p-6.my-4.rounded-md ul');
@@ -79,21 +83,11 @@ async function extractPropertyData(page, url) {
       return characteristicsObj;
     });
 
-    const transactionType = url.includes('sale') ? 'Sale' : 'Rent';
-
-    // Extract the property type
-    const propertyType = await page.evaluate(() => {
-      const spanElement = document.querySelector('span[itemprop="name"]');
-      return spanElement ? spanElement.innerText.trim() : '';
-    });
-
-    // Extract the property name from the meta tag
     const propertyName = await page.evaluate(() => {
       const metaTag = document.querySelector('meta[property="og:title"]');
       return metaTag ? metaTag.content : '';
     });
 
-    // Extract the description, first try from the earlier selector, then fall back to the meta tag
     let cleanDescription = removeHTMLTags(propertyData.description || '');
     if (!cleanDescription) {
       const metaDescription = await page.evaluate(() => {
@@ -103,26 +97,24 @@ async function extractPropertyData(page, url) {
       cleanDescription = metaDescription;
     }
 
-    // Extract price in ruble and USD if not found in JSON
-    let priceInRuble = propertyData.priceRatesPerM2?.['933'] || '';
-    let priceInUSD = propertyData.priceRatesPerM2?.['840'] || '';
 
-        const pricePerM = extractPricePerM(propertyData);
+    let area = features['Площадь'] || '-';
+    let propertyType = features['Тип'] || '-';
 
+    const pricePerM = extractPricePerM(propertyData);
 
-    console.log(propertyData)
     return {
       name: propertyName,
       address: propertyData.address || '',
-      price_in_$: priceInUSD,
-      price_in_ruble: priceInRuble,
+      pricePerM: pricePerM,
       description: cleanDescription,
-      area: propertyData.areaTotal || '',
+      area: area || '',
       longitude: propertyData.location ? propertyData.location[0] : '',
       latitude: propertyData.location ? propertyData.location[1] : '',
-      propertyType: propertyType, // Use the extracted property type here
+      propertyType: propertyType,
       transactionType: transactionType,
       characteristics: characteristics || '',
+      features: features || '-',
       url: url
     };
   } catch (error) {
