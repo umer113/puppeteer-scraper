@@ -13,6 +13,36 @@ function delay(time) {
   });
 }
 
+
+async function extractFeatures(page) {
+  try {
+    const features = await page.evaluate(() => {
+      const featureObj = {};
+      const featureContainer = document.querySelector('.flex.flex-wrap.md\\:justify-start.-mt-6.md\\:mb-0.order-2.mb-6');
+
+      if (featureContainer) {
+        const featureItems = featureContainer.querySelectorAll('div.last\\:mr-0.pt-6.mr-10');
+        featureItems.forEach(item => {
+          const valueElement = item.querySelector('div.text-h3.font-raleway.font-bold');
+          const keyElement = item.querySelector('p.mt-0\\.5.md\\:mt-1.text-basic');
+          if (valueElement && keyElement) {
+            const key = keyElement.innerText.trim();
+            const value = valueElement.innerText.trim();
+            featureObj[key] = value;
+          }
+        });
+      }
+
+      return featureObj;
+    });
+
+    return features;
+  } catch (error) {
+    console.error(`Failed to extract features: ${error.message}`);
+    return {};
+  }
+}
+
 function extractPricePerM(propertyData) {
     try {
       if (propertyData.priceRatesPerM2) {
