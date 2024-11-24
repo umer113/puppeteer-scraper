@@ -132,6 +132,8 @@ async function extractPropertyData(page, url) {
     let propertyType = features['Тип'] || '-';
 
     const pricePerM = extractPricePerM(propertyData);
+        let priceInRuble = propertyData.priceRatesPerM2?.['933'] || '';
+    let priceInUSD = propertyData.priceRatesPerM2?.['840'] || '';
 
     return {
       name: propertyName,
@@ -243,6 +245,7 @@ const browser = await puppeteerExtra.launch({
       for (const propertyUrl of allPropertyUrls) {
         const data = await extractPropertyData(page, propertyUrl);
         console.log(`Scraping ${count} of total ${allPropertyUrls.length}`)
+        console.log(data)
         if (data) {
           allPropertyData.push(data);
           count+=1
