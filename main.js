@@ -76,7 +76,10 @@ async function extractPropertyData(page, url) {
       return jsonData.props?.pageProps?.initialState?.objectView?.object || {};
     });
 
+// characteristics
+
     const transactionType = url.includes('sale') ? 'Sale' : 'Rent';
+
 
     const features = await extractFeatures(page);
 
@@ -98,11 +101,15 @@ async function extractPropertyData(page, url) {
       return characteristicsObj;
     });
 
+
+
+    // Extract the property name from the meta tag
     const propertyName = await page.evaluate(() => {
       const metaTag = document.querySelector('meta[property="og:title"]');
       return metaTag ? metaTag.content : '';
     });
 
+    // Extract the description, first try from the earlier selector, then fall back to the meta tag
     let cleanDescription = removeHTMLTags(propertyData.description || '');
     if (!cleanDescription) {
       const metaDescription = await page.evaluate(() => {
@@ -112,21 +119,28 @@ async function extractPropertyData(page, url) {
       cleanDescription = metaDescription;
     }
 
+    // Extract price in ruble and USD if not found in JSON
+    let priceInRuble = propertyData.priceRatesPerM2?.['933'] || '';
+    let priceInUSD = propertyData.priceRatesPerM2?.['840'] || '';
 
-    let area = features['Площадь'] || '-';
-    let propertyType = features['Тип'] || '-';
+    const pricePerM = await extractPricePerM(page);
+
+    let area = features['Площадь'] || '-'
+    let propertyType = features['Тип'] || '-'
 
 
+    console.log(propertyData)
     return {
       name: propertyName,
       address: propertyData.address || '',
-      price_in_$: propertyData.priceRates ? propertyData.priceRates['840'] : '',
-      price_in_ruble: propertyData.priceRates ? propertyData.priceRates['933'] : '',
+      price_in_$: priceInUSD,
+      price_in_ruble: priceInRuble,
+      pricePerM:  pricePerM,
       description: cleanDescription,
       area: area || '',
       longitude: propertyData.location ? propertyData.location[0] : '',
       latitude: propertyData.location ? propertyData.location[1] : '',
-      propertyType: propertyType,
+      propertyType: propertyType, // Use the extracted property type here
       transactionType: transactionType,
       characteristics: characteristics || '',
       features: features || '-',
