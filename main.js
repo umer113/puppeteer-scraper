@@ -14,6 +14,29 @@ function delay(time) {
 }
 
 
+async function extractPricePerM(page) {
+  try {
+    const pricePerM = await page.evaluate(() => {
+      // Select all elements matching the target class
+      const priceElements = document.querySelectorAll('h2.!inline-block.mr-1.lg\\:text-h2Lg.text-h2.font-raleway.font-bold.flex.items-center');
+      
+      // Ensure the third element exists
+      if (priceElements.length >= 3) {
+        return priceElements[2].innerText.trim(); // Extract text from the third element
+      }
+      return null; // Return null if the third element is not present
+    });
+
+    return pricePerM;
+  } catch (error) {
+    console.error(`Failed to extract price/m²: ${error.message}`);
+    return null;
+  }
+}
+
+
+
+// Function to extract features in key-value pairs
 async function extractFeatures(page) {
   try {
     const features = await page.evaluate(() => {
@@ -42,6 +65,7 @@ async function extractFeatures(page) {
     return {};
   }
 }
+
 
 // Function to extract the total number of listings
 async function extractTotalListings(page) {
@@ -151,9 +175,8 @@ async function extractPropertyData(page, url) {
     return null;
   }
 }
-
 // Function to create an Excel file and save the data
-async function saveToExcel(data, url) {
+async function saveToExcel(data, outputDir) {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Properties');
 
@@ -162,6 +185,7 @@ async function saveToExcel(data, url) {
     { header: 'Address', key: 'address', width: 30 },
     { header: 'price_in_$', key: 'price_in_$', width: 15 },
     { header: 'price_in_ruble', key: 'price_in_ruble', width: 15 },
+    { header: 'Price per m²', key: 'pricePerM', width: 15 },
     { header: 'Description', key: 'description', width: 50 },
     { header: 'Area', key: 'area', width: 10 },
     { header: 'Longitude', key: 'longitude', width: 15 },
@@ -169,6 +193,7 @@ async function saveToExcel(data, url) {
     { header: 'Property Type', key: 'propertyType', width: 20 },
     { header: 'Transaction Type', key: 'transactionType', width: 20 },
     { header: 'Characteristics', key: 'characteristics', width: 50 },
+    { header: 'Features', key: 'features', width: 50 },
     { header: 'URL', key: 'url', width: 50 }
   ];
 
@@ -178,29 +203,28 @@ async function saveToExcel(data, url) {
     }
   });
 
-    const fileName = `output/${url.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`;
-    await workbook.xlsx.writeFile(fileName);
-    console.log(`Data saved to ${fileName}`);
-
+  const filePath = path.join(outputDir, 'properties.xlsx');
+  await workbook.xlsx.writeFile(filePath);
+  console.log(`Data saved to ${filePath}`);
 }
-
 // Main function to handle the scraping process
 (async () => {
-const browser = await puppeteerExtra.launch({
-  headless: 'new', // Correctly set headless to 'new'
-  args: ['--no-sandbox', '--disable-setuid-sandbox']
+ const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    protocolTimeout: 120000, // Increase timeout to 2 minutes
 });
 
   const page = await browser.newPage();
 
   const urls = [
-    'https://realt.by/rent/offices/',
+    'https://realt.by/rent/offices/?addressV2=%5B%7B%22stateDistrictUuid%22%3A%22495ebec0-7b00-11eb-8943-0cc47adabd66%22%7D%5D&page=1&townDistanceV2To=10',
     // Add more URLs here
   ];
 
   for (const url of urls) {
     try {
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
 
       const totalListings = await extractTotalListings(page);
       console.log(`Total listings found: ${totalListings}`);
@@ -212,9 +236,9 @@ const browser = await puppeteerExtra.launch({
 
       // Iterate through all pages
       for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-        const pageUrl = `${url}&page=${pageNum}`;
+        const pageUrl = `${url}?page=${pageNum}`;
         try {
-          await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+          await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 0 });
           await page.waitForSelector('.p-0.bg-white.block');
 
           const propertyUrls = await page.evaluate(() => {
@@ -241,8 +265,8 @@ const browser = await puppeteerExtra.launch({
       let count = 1
       for (const propertyUrl of allPropertyUrls) {
         const data = await extractPropertyData(page, propertyUrl);
-        console.log(`Scraping ${count} of total ${allPropertyUrls.length}`)
         console.log(data)
+        console.log(`Scraping ${count} of total ${allPropertyUrls.length}`)
         if (data) {
           allPropertyData.push(data);
           count+=1
