@@ -209,7 +209,7 @@ async function saveToExcel(data, outputDir) {
 }
 // Main function to handle the scraping process
 (async () => {
- const browser = await puppeteer.launch({
+ const browser = await puppeteerExtra.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
     protocolTimeout: 120000, // Increase timeout to 2 minutes
