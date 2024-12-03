@@ -1,5 +1,4 @@
-const puppeteer = require('puppeteer-core');
-const puppeteerExtra = require('puppeteer-extra');
+const puppeteer = require('puppeteer-extra');
 const stealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
